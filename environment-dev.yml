@@ -1,0 +1,8 @@
+name: symbench-athens-client-dev
+channels:
+  - conda-forge
+dependencies:
+  - pip:
+    - python-jenkins
+    - pytest
+    - black
