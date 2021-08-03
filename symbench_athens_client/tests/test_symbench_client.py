@@ -1,21 +1,21 @@
 import os
+
 import pytest
 
 from symbench_athens_client.__main__ import SymbenchAthensClient
 
 
 class TestSymbenchClient:
-    @pytest.fixture(scope='session')
+    @pytest.fixture(scope="session")
     def symbench_client(self):
         return SymbenchAthensClient(
-            jenkins_url=os.environ.get('JENKINS_URL'),
-            username=os.environ.get('JENKINS_USERNAME'),
-            password=os.environ.get('JENKINS_PASSWORD')
+            jenkins_url=os.environ.get("JENKINS_URL"),
+            username=os.environ.get("JENKINS_USERNAME"),
+            password=os.environ.get("JENKINS_PASSWORD"),
         )
-    
+
     def test_client_exists(self, symbench_client):
         assert symbench_client
-    
 
     def test_available_jobs(self, symbench_client):
         jobs = symbench_client.get_available_jobs()
