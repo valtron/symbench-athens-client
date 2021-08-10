@@ -9,3 +9,4 @@ dependencies:
     - black
     - pre-commit
     - isort
+    - gremlinpython
