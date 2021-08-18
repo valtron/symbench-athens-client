@@ -14,5 +14,4 @@ if __name__ == "__main__":
 
     for cls in Battery, Motor, Propeller, Wing:
         builder = ComponentsBuilder(Battery, get_all_components_of_class(Battery))
-        print(cls.__name__)
         builder.to_csv(f"{cls.__name__}.csv")
