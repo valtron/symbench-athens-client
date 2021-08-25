@@ -141,3 +141,13 @@ class TestComponents:
 
     def test_repr(self):
         assert repr(Batteries["TurnigyGraphene1600mAh4S75C"])
+
+    def test_wing_to_fd_input(self):
+        wing = Wings["left_NACA_0006"]
+        wing_fd_dict = wing.to_fd_inp()
+
+        assert wing_fd_dict["surface_area"] == 154838.4
+        assert wing_fd_dict["a"] == 0.102
+        assert wing_fd_dict["bias1"] == -0.5
+        assert wing_fd_dict["bias2"] == 0.5
+        assert wing_fd_dict["tau_a"] == 0.4

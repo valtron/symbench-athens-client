@@ -510,7 +510,7 @@ class Wing(Component):
 
     def to_fd_inp(self):
         return {
-            "surface_area": None,
+            "surface_area": self.span / 2.0 * self.chord,
             "a": self.dcl_daoa_slope,
             "C_L0": self.dcl_daoa_slope * self.aoa_l0 * -1,
             "C_Lmax": self.cl_max,
