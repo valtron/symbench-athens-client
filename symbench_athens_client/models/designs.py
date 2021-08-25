@@ -39,6 +39,27 @@ class SeedDesign(BaseModel):
         "r",
     }
 
+    @property
+    def num_propellers(self):
+        return sum(
+            1 if isinstance(component, Propeller) else 0
+            for name, component in self.iter_components()
+        )
+
+    @property
+    def num_wings(self):
+        return sum(
+            1 if isinstance(component, Wing) else 0
+            for name, component in self.iter_components()
+        )
+
+    @property
+    def num_batteries(self):
+        return sum(
+            1 if isinstance(component, Battery) else 0
+            for name, component in self.iter_components()
+        )
+
     name: str = Field(
         "", alias="name", description="Name of the seed design in the graph database"
     )
@@ -118,6 +139,46 @@ class SeedDesign(BaseModel):
                 self.swap_list[field_info_for_key.alias].append(value.name)
 
         super().__setattr__(key, value)
+
+    def get_aircraft_fd_data(self, analysis_type):
+        return {
+            "cname": f"'UAV_{self.name}' ! M name of the aircraft",
+            "ctype": f"'SymCPS UAV Design'  ! Type of the Aircraft",
+            "num_wings": f"{self.num_wings}  ! M number of wings in aircraft",
+            "uc_initial": [
+                "0.4d0, 0.5d0, 0.6d0, 0.7d0 ! inputs for controls",
+                "0.5d0, 0.5d0, 0.5d0, 0.5d0",
+            ],
+            "time": "0.d0        ! initial time (default = 0.)",
+            "dt": "1.d-03        ! s  fixed time step",
+            "dt_output": "1.0d0  ! s  time between output lines",
+            "time_end": "1000.d0       ! s  end time ",
+            "Unwind": "0.d0      !  North wind speed in world frame",
+            "Vewind": "0.d0      !  East wind speed in  world frame",
+            "Wdwind": "0.d0      ! Down wind speed in world frame",
+            "debug": "0          ! verbose printouts from fderiv",
+            "num_propellers": self.num_propellers,
+            "num_batteries": self.num_batteries,
+            "i_analysis_type": analysis_type,
+            "x_initial": "0.d0, 0.d0, 0.d0, 0.d0, 0.d0, 0.d0, 1.d0, 0.d0, 0.d0, 0.d0, 0.d0, 0.d0, 0.d0",
+        }
+
+    def _estimate_mass_properties(self, testbench_path):
+        from symbench_athens_client.utils import get_mass_estimates_for
+
+        for var in self.__design_vars__:
+            if isinstance(getattr(self, var), Tuple):
+                raise ValueError(
+                    "Cannot estimate mass properties for a range. "
+                    "Please set discrete values for the design variables."
+                )
+
+        property_estimates = get_mass_estimates_for(testbench_path, self)
+        property_estimates["x_fuse"] = property_estimates["x_cm"]
+        property_estimates["y_fuse"] = property_estimates["y_cm"]
+        property_estimates["z_fuse"] = property_estimates["z_cm"]
+
+        return property_estimates
 
     @validator("name", pre=True, always=True)
     def validate_name(cls, name):
@@ -350,27 +411,7 @@ class QuadCopter(SeedDesign):
             propeller_1, propeller_2, propeller_3, propeller_4
         )
 
-        aircraft_data = {
-            "cname": f"'UAV_{self.name}' ! M name of the aircraft",
-            "ctype": f"'SymCPS UAV Design'  ! Type of the Aircraft",
-            "num_wings": "0  ! M number of wings in aircraft",
-            "uc_initial": [
-                "0.4d0, 0.5d0, 0.6d0, 0.7d0 ! inputs for controls",
-                "0.5d0, 0.5d0, 0.5d0, 0.5d0",
-            ],
-            "time": "0.d0        ! initial time (default = 0.)",
-            "dt": "1.d-03        ! s  fixed time step",
-            "dt_output": "1.0d0  ! s  time between output lines",
-            "time_end": "1000.d0       ! s  end time ",
-            "Unwind": "0.d0      !  North wind speed in world frame",
-            "Vewind": "0.d0      !  East wind speed in  world frame",
-            "Wdwind": "0.d0      ! Down wind speed in world frame",
-            "debug": "0          ! verbose printouts from fderiv",
-            "num_propellers": 4,
-            "num_batteries": 1,
-            "i_analysis_type": analysis_type,
-            "x_initial": "0.d0, 0.d0, 0.d0, 0.d0, 0.d0, 0.d0, 1.d0, 0.d0, 0.d0, 0.d0, 0.d0, 0.d0, 0.d0",
-        }
+        aircraft_data = self.get_aircraft_fd_data(analysis_type)
 
         aircraft_data.update(masses["aircraft"])
 
@@ -400,19 +441,7 @@ class QuadCopter(SeedDesign):
 
     def _get_mass_properties(self, testbench_path):
         """Get estimated mass properties for the quadcopter(works only for single parameters for now)"""
-        from symbench_athens_client.utils import get_mass_estimates_for
-
-        for var in self.__design_vars__:
-            if isinstance(getattr(self, var), Tuple):
-                raise ValueError(
-                    "Cannot estimate mass properties for a range. "
-                    "Please set discrete values for the design variables."
-                )
-
-        property_estimates = get_mass_estimates_for(testbench_path, self)
-        property_estimates["x_fuse"] = property_estimates["x_cm"]
-        property_estimates["y_fuse"] = property_estimates["y_cm"]
-        property_estimates["z_fuse"] = property_estimates["z_cm"]
+        property_estimates = self._estimate_mass_properties(testbench_path)
         return {
             "propeller_0": {
                 "x": property_estimates.pop("Prop_0_x"),
