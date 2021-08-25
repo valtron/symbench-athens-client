@@ -140,7 +140,7 @@ class SeedDesign(BaseModel):
 
         super().__setattr__(key, value)
 
-    def get_aircraft_fd_data(self, analysis_type):
+    def _get_aircraft_fd_data(self, analysis_type):
         return {
             "cname": f"'UAV_{self.name}' ! M name of the aircraft",
             "ctype": f"'SymCPS UAV Design'  ! Type of the Aircraft",
@@ -163,6 +163,23 @@ class SeedDesign(BaseModel):
             "x_initial": "0.d0, 0.d0, 0.d0, 0.d0, 0.d0, 0.d0, 1.d0, 0.d0, 0.d0, 0.d0, 0.d0, 0.d0, 0.d0",
         }
 
+    def _get_fd_control_params(
+        self, flight_path, requested_vertical_speed, requested_lateral_speed
+    ):
+        num_propellers = self.num_propellers
+        return {
+            "i_flight_path": flight_path,
+            "requested_lateral_speed": int(requested_lateral_speed),
+            "requested_vertical_speed": requested_vertical_speed,
+            "iaileron": num_propellers + 1,
+            "iflap": num_propellers + 2,
+            "Q_position": self.q_position,
+            "Q_velocity": self.q_velocity,
+            "Q_angular_velocity": self.q_angular_velocity,
+            "Q_angles": self.q_angles,
+            "R": self.r,
+        }
+
     def _estimate_mass_properties(self, testbench_path):
         from symbench_athens_client.utils import get_mass_estimates_for
 
@@ -179,6 +196,66 @@ class SeedDesign(BaseModel):
         property_estimates["z_fuse"] = property_estimates["z_cm"]
 
         return property_estimates
+
+    @staticmethod
+    def _assign_normals(propeller_dict):
+        propeller_dict.update({"nx": 0.0, "ny": 0.0, "nz": -1.0})
+
+    @staticmethod
+    def _assign_controls_and_battery(*propeller_dicts):
+        for i, inp_dict in enumerate(propeller_dicts):
+            inp_dict["icontrol"] = i + 1
+            inp_dict["ibattery"] = 1
+
+    @staticmethod
+    def _to_fd_inp_str(input_dict):
+        """Write the flight dynamics input file (Clean refactorable implementation)"""
+        inp_lines = ["&aircraft_data"]
+        duplicate_entries = []
+        for key, value in input_dict["aircraft"].items():
+            if isinstance(value, list):
+                for j in range(1, len(value)):
+                    duplicate_entries.append(f"   aircraft%{key}     = {value[j]}")
+                inp_lines.append(f"   aircraft%{key}     = {value[0]}")
+            else:
+                inp_lines.append(f"   aircraft%{key}     = {value}")
+
+        for entry in duplicate_entries:
+            inp_lines.append(entry)
+
+        inp_lines.append("\n")
+
+        for j, propeller_dict in enumerate(input_dict["propellers"]):
+            for_components = propeller_dict.pop("for")
+            comment_line = f"!   Propeller({j+1}) uses components named Prop_{for_components} , Motor_{for_components}, ESC_{for_components}"
+            inp_lines.append(comment_line)
+            for key, value in propeller_dict.items():
+                inp_lines.append(f"   propeller({j+1})%{key}   = {str(value)}")
+
+            inp_lines.append("\n")
+
+        for j, wing_dict in enumerate(input_dict["wings"]):
+            for_component = wing_dict.pop("for")
+            comment_line = f"!   Wing({j+1}) is the component named: {for_component}"
+            inp_lines.append(comment_line)
+            for key, value in wing_dict.items():
+                inp_lines.append(f"   propeller({j+1})%{key}   = {str(value)}")
+
+            inp_lines.append("\n")
+
+        inp_lines.append("!\t Battery(1) is component named: Battery_0")
+        for key, value in input_dict["battery"].items():
+            inp_lines.append(f"   battery(1)%{key}    = {value}")
+
+        inp_lines.append("\n")
+
+        inp_lines.append("!\t Controls")
+
+        for key, value in input_dict["controls"].items():
+            inp_lines.append(f"   control%{key} = {value}")
+        inp_lines.append("/\n\n")
+
+        return "\n".join(inp_lines)
 
     @validator("name", pre=True, always=True)
     def validate_name(cls, name):
@@ -411,7 +488,7 @@ class QuadCopter(SeedDesign):
             propeller_1, propeller_2, propeller_3, propeller_4
         )
 
-        aircraft_data = self.get_aircraft_fd_data(analysis_type)
+        aircraft_data = self._get_aircraft_fd_data(analysis_type)
 
         aircraft_data.update(masses["aircraft"])
 
@@ -419,23 +496,12 @@ class QuadCopter(SeedDesign):
             "aircraft": aircraft_data,
             "propellers": [propeller_1, propeller_2, propeller_3, propeller_4],
             "battery": self.battery_0.to_fd_inp(),
-            "controls": {
-                "i_flight_path": flight_path,
-                "requested_lateral_speed": int(requested_lateral_speed),
-                "requested_vertical_speed": requested_vertical_speed,
-                "iaileron": 5,
-                "iflap": 6,
-                "Q_position": self.q_position,
-                "Q_velocity": self.q_velocity,
-                "Q_angular_velocity": self.q_angular_velocity,
-                "Q_angles": self.q_angles,
-                "R": self.r,
-            },
+            "controls": self._get_fd_control_params(),
         }
 
         if filename is not None:
             with open(filename, "w") as fd_inp:
-                fd_inp.write(self._to_fd_inp(fd_params))
+                fd_inp.write(self._to_fd_inp_str(fd_params))
         else:
             return fd_params
 
@@ -465,57 +531,6 @@ class QuadCopter(SeedDesign):
             },
             "aircraft": property_estimates,
         }
-
-    @staticmethod
-    def _assign_normals(propeller_dict):
-        propeller_dict.update({"nx": 0.0, "ny": 0.0, "nz": -1.0})
-
-    @staticmethod
-    def _assign_controls_and_battery(*propeller_dicts):
-        for i, inp_dict in enumerate(propeller_dicts):
-            inp_dict["icontrol"] = i + 1
-            inp_dict["ibattery"] = 1
-
-    @staticmethod
-    def _to_fd_inp(input_dict):
-        """Write the flight dynamics input file (Clean refactorable implementation)"""
-        inp_lines = ["&aircraft_data"]
-        duplicate_entries = []
-        for key, value in input_dict["aircraft"].items():
-            if isinstance(value, list):
-                for j in range(1, len(value)):
-                    duplicate_entries.append(f"   aircraft%{key}     = {value[j]}")
-                inp_lines.append(f"   aircraft%{key}     = {value[0]}")
-            else:
-                inp_lines.append(f"   aircraft%{key}     = {value}")
-
-        for entry in duplicate_entries:
-            inp_lines.append(entry)
-
-        inp_lines.append("\n")
-
-        for propeller_dict in input_dict["propellers"]:
-            for_components = propeller_dict.pop("for")
-            comment_line = f"!   Propeller({for_components+1}) uses components named Prop_{for_components}, Motor_{for_components}, ESC_{for_components}"
-            inp_lines.append(comment_line)
-            for key, value in propeller_dict.items():
-                inp_lines.append(
-                    f"   propeller({for_components+1})%{key}   = {str(value)}"
-                )
-
-            inp_lines.append("\n")
-
-        inp_lines.append("!\t Battery(1) is component named: Battery_0")
-        for key, value in input_dict["battery"].items():
-            inp_lines.append(f"   battery(1)%{key}    = {value}")
-
-        inp_lines.append("\n")
-
-        inp_lines.append("!\t Controls")
-        for key, value in input_dict["controls"].items():
-            inp_lines.append(f"   control%{key} = {value}")
-        inp_lines.append("/\n\n")
-        return "\n".join(inp_lines)
 
     def validate_propellers_directions(self):
         assert (
@@ -1285,6 +1300,132 @@ class HPlane(SeedDesign):
         description="The battery",
         alias="Battery_0",
     )
+
+    def _get_mass_properties(self, testbench_path):
+        """Get estimated mass properties for the quadcopter(works only for single parameters for now)"""
+        property_estimates = self._estimate_mass_properties(testbench_path)
+        return {
+            "front_prop_l": {
+                "x": property_estimates.pop("Front_Prop_L_x"),
+                "y": property_estimates.pop("Front_Prop_L_y"),
+                "z": property_estimates.pop("Front_Prop_L_z"),
+            },
+            "front_prop_r": {
+                "x": property_estimates.pop("Front_Prop_R_x"),
+                "y": property_estimates.pop("Front_Prop_R_y"),
+                "z": property_estimates.pop("Front_Prop_R_z"),
+            },
+            "front_prop_c": {  # FIXME: Front_Prop_C missing from Miklos' code
+                "x": 0,
+                "y": 0,
+                "z": 0,
+            },
+            "left_wing": {
+                "x": property_estimates.pop("Left_Wing_x"),
+                "y": property_estimates.pop("Left_Wing_y"),
+                "z": property_estimates.pop("Left_Wing_z"),
+            },
+            "right_wing": {
+                "x": property_estimates.pop("Right_Wing_x"),
+                "y": property_estimates.pop("Right_Wing_y"),
+                "z": property_estimates.pop("Right_Wing_z"),
+            },
+            "aircraft": property_estimates,
+        }
+
+    def to_fd_input(
+        self,
+        test_bench_path,
+        propellers_data_path=None,
+        filename=None,
+        analysis_type=3,
+        flight_path=1,
+        requested_vertical_speed=10.0,
+        requested_lateral_speed=1,
+    ):
+        """Get SWRi's flight dynamics model's input files for this design
+        Parameters
+        ----------
+        test_bench_path: str, pathlib.Path
+            The location of the testbench data to use by uav_analysis.testbench_data.TestBenchData
+        propellers_data_path: str, pathlib.Path
+            The base directory for propellers data
+        filename: str, pathlib.Path
+            The Path of the input file, should have an .inp extension
+        analysis_type: int, default=3
+            The analysis type for this input file (3=flight path analysis, 2=Trim Steady, 1=Initial Conditions)
+        flight_path: int, default=1
+            The flight path for analysis_type of 3, (1=fly straight line, 2=Unused, 3= fly circle, 4 = rise and hover, 5 = racing oval
+        requested_vertical_speed: float, default=10.0
+            The requested vertical speed for the FD software
+        requested_lateral_speed: int, default=1
+            The requested lateral speed for the FD software
+        Returns
+        -------
+        dict or None
+            if filename is None, this method will return a dictionary containing all the parameters
+            otherwise the file will be saved as filename
+        """
+        masses = self._get_mass_properties(test_bench_path)
+
+        propeller_front_l = self.front_prop_l.to_fd_inp(propellers_data_path)
+        propeller_front_l["for"] = "Front_L"
+        propeller_front_l.update(self.front_motor_l.to_fd_inp())
+        propeller_front_l.update(masses["front_prop_l"])
+
+        propeller_front_r = self.front_prop_r.to_fd_inp(propellers_data_path)
+        propeller_front_r["for"] = "Front_R"
+        propeller_front_r.update(self.front_motor_r.to_fd_inp())
+        propeller_front_r.update(masses["front_prop_r"])
+
+        propeller_front_c = self.front_prop_c.to_fd_inp(propellers_data_path)
+        propeller_front_c["for"] = "Front_C"
+        propeller_front_c.update(self.front_motor_c.to_fd_inp())
+        propeller_front_c.update(masses["front_prop_c"])
+
+        propeller_rear_l = self.rear_prop_l.to_fd_inp(propellers_data_path)
+        propeller_rear_l["for"] = "Rear_L"
+        propeller_rear_l.update(self.rear_motor_l.to_fd_inp())
+        propeller_front_l.update(masses["front_prop_r"])
+
+        propeller_rear_r = self.rear_prop_r.to_fd_inp(propellers_data_path)
+        propeller_rear_r["for"] = "Rear_R"
+        propeller_rear_r.update(self.rear_motor_r.to_fd_inp())
+        propeller_front_r.update(masses["front_prop_r"])
+
+        left_wing = self.left_wing.to_fd_inp()
+        left_wing["for"] = "Left_Wing"
+        left_wing.update(masses["left_wing"])
+
+        right_wing = self.right_wing.to_fd_inp()
+        right_wing["for"] = "Right_Wing"
+        right_wing.update(masses["right_wing"])
+
+        aircraft_data = self._get_aircraft_fd_data(analysis_type)
+
+        aircraft_data.update(masses["aircraft"])
+
+        fd_params = {
+            "aircraft": aircraft_data,
+            "propellers": [
+                propeller_front_l,
+                propeller_front_r,
+                propeller_front_c,
+                propeller_rear_l,
+                propeller_rear_r,
+            ],
+            "wings": [left_wing, right_wing],
+            "battery": self.battery_0.to_fd_inp(),
+            "controls": self._get_fd_control_params(
+                flight_path, requested_vertical_speed, requested_lateral_speed
+            ),
+        }
+
+        if filename is not None:
+            with open(filename, "w") as fd_inp:
+                fd_inp.write(self._to_fd_inp_str(fd_params))
+        else:
+            return fd_params
 
     @validator(*__design_vars__, pre=True, always=True)
     def validate_design_vars_tuple(cls, value):
