@@ -1,3 +1,5 @@
+import os
+
 from gremlin_python.driver.driver_remote_connection import DriverRemoteConnection
 from gremlin_python.process.anonymous_traversal import traversal
 from gremlin_python.process.graph_traversal import __
@@ -29,28 +31,7 @@ class ComponentCorpusExporter:
         for component in component_vertices:
             # In favor of correctness and timing consideration, I have chosen the following queries
             # These queries might not be the most optimal/fastest
-            component_properties = (
-                self.g.V()
-                .hasLabel("[avm]Component")
-                .has("[]Name", component)
-                .as_("comp")
-                .in_("inside")
-                .hasLabel("[]Property")
-                .as_("prop")
-                .in_("inside")
-                .in_("inside")
-                .in_("inside")
-                .in_("inside")
-                .as_("val")
-                .select("prop")
-                .by("[]Name")
-                .as_("propname")
-                .select("val")
-                .by(__.coalesce(__.values("value"), __.constant("none")))
-                .as_("sval")
-                .select("propname", "sval")
-                .toList()
-            )
+            component_properties = self._get_fixed_properties(component)
 
             all_components[component] = {}
 
@@ -68,7 +49,7 @@ class ComponentCorpusExporter:
             )
 
             self.logger.info(
-                f"Extracted properties for {component}. The component type is {component_class}"
+                f"Extracted fixed properties for {component}. The component type is {component_class}"
             )
 
             for component_property in component_properties:
@@ -81,10 +62,76 @@ class ComponentCorpusExporter:
             )
 
             if not len(component_class):
-                self.logger.warn(f"Missing component classification for {component}")
+                self.logger.warning(f"Missing component classification for {component}")
                 components_with_missing_classes.append(component)
 
+            parametric_properties = self._get_parametric_properties(component)
+
+            self.logger.info(
+                f"Extracted parametric properties for {component}. Found {len(parametric_properties)}"
+            )
+            for component_property in parametric_properties:
+                all_components[component][
+                    f"para_{component_property['propname']}_{component_property['label']}"
+                ] = component_property["sval"]
+
         return all_components, components_with_missing_classes
+
+    def _get_fixed_properties(self, component):
+        return (
+            self.g.V()
+            .has("[]Name", component)
+            .as_("comp")
+            .in_("inside")
+            .hasLabel("[]Property")
+            .as_("prop")
+            .in_("inside")
+            .in_("inside")
+            .has("[http://www.w3.org/2001/XMLSchema-instance]type", "[avm]FixedValue")
+            .in_("inside")
+            .in_("inside")
+            .as_("val")
+            .select("prop")
+            .by("[]Name")
+            .as_("propname")
+            .select("val")
+            .by(__.coalesce(__.values("value"), __.constant("none")))
+            .as_("sval")
+            .select("propname", "sval")
+            .toList()
+        )
+
+    def _get_parametric_properties(self, component):
+        return (
+            self.g.V()
+            .has("[]Name", component)
+            .as_("comp")
+            .in_("inside")
+            .hasLabel("[]Property")
+            .as_("prop")
+            .in_("inside")
+            .in_("inside")
+            .has(
+                "[http://www.w3.org/2001/XMLSchema-instance]type",
+                "[avm]ParametricValue",
+            )
+            .in_("inside")
+            .as_("type")
+            .in_("inside")
+            .in_("inside")
+            .as_("val")
+            .select("type")
+            .by(__.label())
+            .as_("label")
+            .select("prop")
+            .by("[]Name")
+            .as_("propname")
+            .select("val")
+            .by(__.coalesce(__.values("value"), __.constant("none")))
+            .as_("sval")
+            .select("propname", "sval", "label")
+            .toList()
+        )
 
     def __enter__(self):
         if not self.connection:
@@ -108,20 +155,45 @@ class ComponentCorpusExporter:
 
 if __name__ == "__main__":
     import json
+    from argparse import ArgumentParser
+    from pathlib import Path
 
     from symbench_athens_client.utils import get_data_file_path, get_logger
 
     GREMLIN_URL = "ws://localhost:8182/gremlin"
-    OUT_FILE = get_data_file_path("all_components.json")
-    MISSING_PATH = get_data_file_path("missing_components.txt")
+    OUT_LOC = get_data_file_path(".")
+
+    parser = ArgumentParser(
+        description="The UAV Components Corpus exporter. "
+        "Use this script with caution, as it "
+        "can mess up your package directories."
+    )
+    parser.add_argument(
+        "-s", "--server-url", default=GREMLIN_URL, type=str, help="The gremlin URL"
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        default=OUT_LOC,
+        type=str,
+        help="Where to save the output files. Note: If the directory doesn't exist, it will be created",
+    )
+
+    args = parser.parse_args()
 
     logger = get_logger(f"{__file__}::{__name__}::{ComponentCorpusExporter.__name__}")
     with ComponentCorpusExporter(GREMLIN_URL, logger=logger) as exporter:
         components, missing = exporter.get_components()
-        with open(OUT_FILE, "w") as json_file:
+        save_dir = Path(args.output).resolve()
+        if not save_dir.exists():
+            os.makedirs(save_dir, exist_ok=True)
+
+        with open(save_dir / "all_components.json", "w") as json_file:
             json.dump(components, json_file, indent=2)
 
-        with open(MISSING_PATH, "w") as missing_classifications_file:
+        with open(
+            save_dir / "missing_components.txt", "w"
+        ) as missing_classifications_file:
             missing_classifications_file.write(
                 "##Note: These components are missing classes in the database:\n"
             )
