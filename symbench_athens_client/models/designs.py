@@ -42,22 +42,20 @@ class SeedDesign(BaseModel):
     @property
     def num_propellers(self):
         return sum(
-            1 if isinstance(component, Propeller) else 0
+            isinstance(component, Propeller)
             for name, component in self.iter_components()
         )
 
     @property
     def num_wings(self):
         return sum(
-            1 if isinstance(component, Wing) else 0
-            for name, component in self.iter_components()
+            isinstance(component, Wing) for name, component in self.iter_components()
         )
 
     @property
     def num_batteries(self):
         return sum(
-            1 if isinstance(component, Battery) else 0
-            for name, component in self.iter_components()
+            isinstance(component, Battery) for name, component in self.iter_components()
         )
 
     name: str = Field(
