@@ -33,49 +33,55 @@ param_sweeps = {
     "r": np.geomspace(0.1, 100.0, 10),
 }
 
+req_lateral_speed = "requested_lateral_speed"
+req_vertical_speed = "requested_vertical_speed"
+
+
+def get_best_score(experiment, params, min_lateral_speed, vertical_speed):
+    """Find the best score with a design point (trying to fly the fastest)"""
+    best_score = 0
+    best_reqs = reqs = {
+        req_lateral_speed: min_lateral_speed,
+        req_vertical_speed: vertical_speed,
+    }
+    max_lateral_speed = 50
+
+    while reqs[req_lateral_speed] <= max_lateral_speed:
+        result = experiment.run_for(params, reqs)
+        max_lateral_speed = result["Max_Speed"]  # shorten this loop
+        score = result["TotalPathScore"]
+        if score > best_score:
+            best_score = score
+            best_reqs = reqs.copy()
+        reqs[req_lateral_speed] += 1
+
+    return score, best_reqs
+
 
 def optimize(experiment, min_lateral_speed, vertical_speed, output_file):
     """Find the best parameters for the given experiment"""
 
-    lspeed_name = "requested_lateral_speed"
-    assert lspeed_name in experiment.valid_requirements
-    vspeed_name = "requested_vertical_speed"
-    assert vspeed_name in experiment.valid_requirements
+    assert req_lateral_speed in experiment.valid_requirements
+    assert req_vertical_speed in experiment.valid_requirements
 
     param_names = list(
         set(param_sweeps.keys()) & set(experiment.valid_parameters)
     )
 
     writer = DictWriter(
-        output_file, ["score"] + param_names + [lspeed_name, vspeed_name]
+        output_file,
+        ["score"] + param_names + [req_lateral_speed, req_vertical_speed],
     )
     writer.writeheader()
 
     for param_values in product(*[param_sweeps[p] for p in param_names]):
-        parameters = dict(zip(param_names, param_values))
+        params = dict(zip(param_names, param_values))
 
-        best_score = 0
-        best_requirements = requirements = {
-            lspeed_name: min_lateral_speed,
-            vspeed_name: vertical_speed,
-        }
-        max_lateral_speed = 50
-
-        while requirements[lspeed_name] <= max_lateral_speed:
-            result = experiment.run_for(parameters, requirements)
-            max_lateral_speed = result["Max_Speed"]  # shorten this loop
-            score = result["TotalPathScore"]
-            if score > best_score:
-                best_score = score
-                best_requirements = requirements
-            requirements[lspeed_name] += 1
-
-        log.info(
-            f"best score for {parameters}: {best_score} at {best_requirements}"
+        best_score, best_reqs = get_best_score(
+            experiment, params, min_lateral_speed, vertical_speed
         )
-        writer.writerow(
-            {"score": best_score, **parameters, **best_requirements}
-        )
+        log.info(f"best score for {params}: {best_score} at {best_reqs}")
+        writer.writerow({"score": best_score, **params, **best_reqs})
         output_file.flush()
 
 
