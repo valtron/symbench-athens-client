@@ -526,9 +526,9 @@ class Wing(Component):
             "x": None,
             "y": None,
             "z": None,
-            "nx": 0.0,
-            "ny": 0.0,
-            "nz": -1.0,
+            "nx": None,
+            "ny": None,
+            "nz": None,
         }
 
     @root_validator(pre=True)

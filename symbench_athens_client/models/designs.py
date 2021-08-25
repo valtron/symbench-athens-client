@@ -198,8 +198,11 @@ class SeedDesign(BaseModel):
         return property_estimates
 
     @staticmethod
-    def _assign_normals(propeller_dict):
-        propeller_dict.update({"nx": 0.0, "ny": 0.0, "nz": -1.0})
+    def _assign_normals(propeller_dict, is_horizontal=False):
+        if is_horizontal:
+            propeller_dict.update({"nx": 1.0, "ny": 0.0, "nz": 0.0})
+        else:
+            propeller_dict.update({"nx": 0.0, "ny": 0.0, "nz": -1.0})
 
     @staticmethod
     def _assign_controls_and_battery(*propeller_dicts):
@@ -1317,10 +1320,20 @@ class HPlane(SeedDesign):
                 "y": property_estimates.pop("Front_Prop_R_y"),
                 "z": property_estimates.pop("Front_Prop_R_z"),
             },
-            "front_prop_c": {  # FIXME: Front_Prop_C missing from Miklos' code
-                "x": 0,
-                "y": 0,
-                "z": 0,
+            "front_prop_c": {
+                "x": property_estimates.pop("Front_Prop_C_x"),
+                "y": property_estimates.pop("Front_Prop_C_y"),
+                "z": property_estimates.pop("Front_Prop_C_z"),
+            },
+            "rear_prop_l": {
+                "x": property_estimates.pop("Rear_Prop_L_x"),
+                "y": property_estimates.pop("Rear_Prop_L_y"),
+                "z": property_estimates.pop("Rear_Prop_L_z"),
+            },
+            "rear_prop_r": {
+                "x": property_estimates.pop("Rear_Prop_R_x"),
+                "y": property_estimates.pop("Rear_Prop_R_y"),
+                "z": property_estimates.pop("Rear_Prop_R_z"),
             },
             "left_wing": {
                 "x": property_estimates.pop("Left_Wing_x"),
@@ -1388,20 +1401,39 @@ class HPlane(SeedDesign):
         propeller_rear_l = self.rear_prop_l.to_fd_inp(propellers_data_path)
         propeller_rear_l["for"] = "Rear_L"
         propeller_rear_l.update(self.rear_motor_l.to_fd_inp())
-        propeller_front_l.update(masses["front_prop_r"])
+        propeller_front_l.update(masses["rear_prop_l"])
 
         propeller_rear_r = self.rear_prop_r.to_fd_inp(propellers_data_path)
         propeller_rear_r["for"] = "Rear_R"
         propeller_rear_r.update(self.rear_motor_r.to_fd_inp())
-        propeller_front_r.update(masses["front_prop_r"])
+        propeller_front_r.update(masses["rear_prop_r"])
+
+        self._assign_normals(propeller_front_l)
+        self._assign_normals(propeller_front_r)
+        self._assign_normals(propeller_front_c, is_horizontal=True)
+        self._assign_normals(propeller_rear_l)
+        self._assign_normals(propeller_rear_r)
+        self._assign_controls_and_battery(
+            propeller_front_l,
+            propeller_front_r,
+            propeller_front_c,
+            propeller_rear_l,
+            propeller_rear_r,
+        )
 
         left_wing = self.left_wing.to_fd_inp()
         left_wing["for"] = "Left_Wing"
         left_wing.update(masses["left_wing"])
+        left_wing["icontrol1"] = self.num_propellers + 1
+        left_wing["icontrol2"] = self.num_propellers + 2
+        self._assign_normals(left_wing)
 
         right_wing = self.right_wing.to_fd_inp()
         right_wing["for"] = "Right_Wing"
         right_wing.update(masses["right_wing"])
+        right_wing["icontrol1"] = self.num_propellers + 3
+        right_wing["icontrol2"] = self.num_propellers + 4
+        self._assign_normals(right_wing)
 
         aircraft_data = self._get_aircraft_fd_data(analysis_type)
 
