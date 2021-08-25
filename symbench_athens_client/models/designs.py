@@ -400,7 +400,7 @@ class QuadCopter(SeedDesign):
 
     def _get_mass_properties(self, testbench_path):
         """Get estimated mass properties for the quadcopter(works only for single parameters for now)"""
-        from symbench_athens_client.utils import get_mass_estimates_for_quadcopter
+        from symbench_athens_client.utils import get_mass_estimates_for
 
         for var in self.__design_vars__:
             if isinstance(getattr(self, var), Tuple):
@@ -409,7 +409,7 @@ class QuadCopter(SeedDesign):
                     "Please set discrete values for the design variables."
                 )
 
-        property_estimates = get_mass_estimates_for_quadcopter(testbench_path, self)
+        property_estimates = get_mass_estimates_for(testbench_path, self)
         property_estimates["x_fuse"] = property_estimates["x_cm"]
         property_estimates["y_fuse"] = property_estimates["y_cm"]
         property_estimates["z_fuse"] = property_estimates["z_cm"]

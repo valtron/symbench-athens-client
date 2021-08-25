@@ -2,7 +2,7 @@ import logging
 from functools import lru_cache
 from typing import Iterable
 
-from uav_analysis.mass_properties import quad_copter_fixed_bemp2
+from uav_analysis.mass_properties import hplane_fixed_bemp, quad_copter_fixed_bemp2
 from uav_analysis.testbench_data import TestbenchData
 
 
@@ -50,21 +50,26 @@ def dict_to_design_vars(inp_dict, repeat_values=True):
 
 
 @lru_cache(maxsize=128)
-def estimate_mass_formulae(tb_data_loc):
+def estimate_mass_formulae(tb_data_loc, design_type="QuadCopter"):
     """Estimate mass properties of a design based on a fixed BEMP config testbench"""
     tb_data = TestbenchData()
     tb_data.load(tb_data_loc)
-    return quad_copter_fixed_bemp2(tb_data)
+    assert design_type in {
+        "QuadCopter",
+        "HPlane",
+    }, "The mass estimates only work for QuadCopter and HPlane Seed Design"
+    estimator = {"QuadCopter": quad_copter_fixed_bemp2, "HPlane": hplane_fixed_bemp}
+    return estimator[design_type](tb_data)
 
 
-def get_mass_estimates_for_quadcopter(testbench_data_path, quad_copter):
-    """Given a quadcopter seed design, calculate the mass properties using creo surrogate estimator.
+def get_mass_estimates_for(testbench_data_path, design):
+    """Given a quadcopter/hplane seed design, calculate the mass properties using creo surrogate estimator.
 
     Parameters
     ----------
     testbench_data_path: str, pathlib.Path
         The zip file location for the uav_analusis.testbench_data.TestBenchData
-    quad_copter: instance of symbench_athens_client.models.design.QuadCopter
+    design: instance of symbench_athens_client.models.design.QuadCopter or symbench_athens_client.models.design.HPlane
         The instance of the QuadCopter seed design to estimate properties for=
 
     Returns
@@ -72,16 +77,14 @@ def get_mass_estimates_for_quadcopter(testbench_data_path, quad_copter):
     dict
         The dictionary of mass properties estimates
     """
-    from symbench_athens_client.models.designs import QuadCopter
+    from symbench_athens_client.models.designs import HPlane, QuadCopter
 
     assert isinstance(
-        quad_copter, QuadCopter
-    ), "The function estimator only works for quadcopter seed design"
+        design, (QuadCopter, HPlane)
+    ), "The function estimator only works for quadcopter and hplane seed design"
 
-    aircraft_parameters = quad_copter.dict(
-        by_alias=True, include=quad_copter.__design_vars__
-    )
-    formulae = estimate_mass_formulae(testbench_data_path)
+    aircraft_parameters = design.dict(by_alias=True, include=design.__design_vars__)
+    formulae = estimate_mass_formulae(testbench_data_path, design.__class__.__name__)
 
     mass_properties = {}
     for key, value in formulae.items():
