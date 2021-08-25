@@ -496,7 +496,9 @@ class QuadCopter(SeedDesign):
             "aircraft": aircraft_data,
             "propellers": [propeller_1, propeller_2, propeller_3, propeller_4],
             "battery": self.battery_0.to_fd_inp(),
-            "controls": self._get_fd_control_params(),
+            "controls": self._get_fd_control_params(
+                flight_path, requested_vertical_speed, requested_lateral_speed
+            ),
         }
 
         if filename is not None:
