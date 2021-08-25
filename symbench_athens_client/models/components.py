@@ -508,6 +508,29 @@ class Wing(Component):
 
     flap_bias: float = Field(..., description="Flap Bias", alias="FLAP_BIAS")
 
+    def to_fd_inp(self):
+        return {
+            "surface_area": None,
+            "a": self.dcl_daoa_slope,
+            "C_L0": self.dcl_daoa_slope * self.aoa_l0 * -1,
+            "C_Lmax": self.cl_max,
+            "C_Lmin": -self.cl_max,
+            "C_D0": self.cd_min,
+            "k": 1.0 / (3.14159 * 0.85 * self.span / self.chord),
+            "C_Dfp": 1,
+            "bias1": self.aileron_bias,
+            "bias2": self.flap_bias,
+            "icontrol1": None,
+            "icontrol2": None,
+            "tau_a": 0.4,
+            "x": None,
+            "y": None,
+            "z": None,
+            "nx": 0.0,
+            "ny": 0.0,
+            "nz": -1.0,
+        }
+
     @root_validator(pre=True)
     def validate_fields(cls, values):
         for field in [
