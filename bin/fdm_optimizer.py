@@ -85,6 +85,8 @@ def results_logger(params, writer, output_file):
     def write_and_log(results):
         nonlocal params
         nonlocal writer
+        nonlocal output_file
+
         best_score, best_reqs = results
 
         log.info(f"best score for {params}: {best_score} at {best_reqs}")
