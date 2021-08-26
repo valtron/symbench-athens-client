@@ -31,16 +31,31 @@ log = logging.getLogger("fdm_optimizer")
 # Question>> Instead of hopelessly searching for the whole range, why don't we start from the point
 # that gives us the best score so far and slide left and right based the baseline base result?
 
+# param_sweeps = {
+#     "arm_length": np.linspace(300, 310, 5),
+#     "support_length": np.linspace(5, 15, 4),
+#     "batt_mount_x_offset": [0],
+#     "batt_mount_z_offset": np.linspace(30, 40, 5),
+#     "q_position": [1.0],
+#     "q_angles": [1.0],
+#     "q_velocity": [1.0],
+#     "q_angular_velocity": [1.0],
+#     #"r": np.geomspace(10.0, 1000.0, 10),
+#     "r": [1000.0],
+# }
+
+
 param_sweeps = {
-    "arm_length": np.linspace(300, 600, 10),
-    "support_length": np.linspace(1, 30, 5),
+    "arm_length": [300],
+    "support_length": [10],
     "batt_mount_x_offset": [0],
-    "batt_mount_z_offset": np.linspace(10, 50, 10),
+    "batt_mount_z_offset": [35],
     "q_position": [1.0],
     "q_angles": [1.0],
     "q_velocity": [1.0],
     "q_angular_velocity": [1.0],
-    "r": np.geomspace(10.0, 1000.0, 10),
+    #"r": np.geomspace(10.0, 1000.0, 10),
+    "r": [1000.0],
 }
 
 req_lateral_speed = "requested_lateral_speed"
@@ -81,7 +96,7 @@ def get_best_score(experiment, params, min_lateral_speed, vertical_speed):
         #         op_writer.writeheader()
         #     op_writer.writerow(result)
 
-    return score, best_reqs
+    return best_score, best_reqs
 
 
 def results_logger(params, writer, output_file):
