@@ -159,7 +159,7 @@ class FlightDynamicsExperiment:
                 )
 
                 input_metrics, flight_metrics, path_metrics = self.executor.execute(
-                    str(fd_input_path), str(fd_output_path)
+                    str(fd_input_path), None
                 )
 
                 # Input Metrics

@@ -39,11 +39,13 @@ class FDMExecutor:
         output_file: str
             The output file path for the flight dynamics software
         """
-        fdm_cmd = f"{self.fdm_path} < {input_file} > {output_file}"
+        fdm_cmd = f"{self.fdm_path} < {input_file}"  # Temoporary Hack to save space
         self.logger.info(
             f"Opening the FDM execution process as {fdm_cmd}, PID: {os.getpid()}"
         )
-        with subprocess.Popen(fdm_cmd, shell=True) as fdm_process:
+        with subprocess.Popen(
+            fdm_cmd, shell=True, stdout=subprocess.DEVNULL
+        ) as fdm_process:
             try:
                 fdm_process.wait(300)
                 if fdm_process.returncode != 0:
@@ -93,8 +95,7 @@ def write_output_csv(output_dir, metrics):
 def cleanup_score_files():
     out_files = glob("*.out")
     for file in out_files:
-        if file in {"path.out", "path2.out", "namelist.out", "score.out"}:
-            os.unlink(file)
+        os.unlink(file)  # Temporary Hack to save space
 
 
 ## ToDo: Deprecate This??

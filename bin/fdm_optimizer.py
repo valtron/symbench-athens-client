@@ -31,11 +31,24 @@ log = logging.getLogger("fdm_optimizer")
 # Question>> Instead of hopelessly searching for the whole range, why don't we start from the point
 # that gives us the best score so far and slide left and right based the baseline base result?
 
+param_sweeps = {
+    "arm_length": np.linspace(300, 600, 10),
+    "support_length": np.linspace(1, 30, 5),
+    "batt_mount_x_offset": [0],
+    "batt_mount_z_offset": np.linspace(10, 50, 5),
+    "q_position": [1.0],
+    "q_angles": [1.0],
+    "q_velocity": [1.0],
+    "q_angular_velocity": [1.0],
+    "r": np.geomspace(10.0, 1000.0, 10),
+}
+
+
 # param_sweeps = {
-#     "arm_length": np.linspace(300, 310, 5),
-#     "support_length": np.linspace(5, 15, 4),
+#     "arm_length": [300],
+#     "support_length": [10],
 #     "batt_mount_x_offset": [0],
-#     "batt_mount_z_offset": np.linspace(30, 40, 5),
+#     "batt_mount_z_offset": [35],
 #     "q_position": [1.0],
 #     "q_angles": [1.0],
 #     "q_velocity": [1.0],
@@ -43,20 +56,6 @@ log = logging.getLogger("fdm_optimizer")
 #     #"r": np.geomspace(10.0, 1000.0, 10),
 #     "r": [1000.0],
 # }
-
-
-param_sweeps = {
-    "arm_length": [300],
-    "support_length": [10],
-    "batt_mount_x_offset": [0],
-    "batt_mount_z_offset": [35],
-    "q_position": [1.0],
-    "q_angles": [1.0],
-    "q_velocity": [1.0],
-    "q_angular_velocity": [1.0],
-    #"r": np.geomspace(10.0, 1000.0, 10),
-    "r": [1000.0],
-}
 
 req_lateral_speed = "requested_lateral_speed"
 req_vertical_speed = "requested_vertical_speed"
@@ -79,6 +78,7 @@ def get_best_score(experiment, params, min_lateral_speed, vertical_speed):
         )
         max_lateral_speed = result["Max_Speed"]  # shorten this loop
         score = result["TotalPathScore"]
+        guid = result["GUID"]
         if score > best_score:
             best_score = score
             best_reqs = reqs.copy()
@@ -95,7 +95,7 @@ def get_best_score(experiment, params, min_lateral_speed, vertical_speed):
         #         op_writer.writeheader()
         #     op_writer.writerow(result)
 
-    return best_score, best_reqs
+    return guid, best_score, best_reqs
 
 
 def results_logger(params, writer, output_file):
@@ -104,10 +104,10 @@ def results_logger(params, writer, output_file):
         nonlocal writer
         nonlocal output_file
 
-        best_score, best_reqs = results
+        guid, best_score, best_reqs = results
 
         log.info(f"best score for {params}: {best_score} at {best_reqs}")
-        writer.writerow({"score": best_score, **params, **best_reqs})
+        writer.writerow({"GUID": guid, "score": best_score, **params, **best_reqs})
         output_file.flush()
         os.fsync(output_file.fileno())
 
@@ -129,17 +129,17 @@ def optimize(
 
     writer = DictWriter(
         output_file,
-        ["score"] + param_names + [req_lateral_speed, req_vertical_speed],
+        ["GUID", "score"] + param_names + [req_lateral_speed, req_vertical_speed],
     )
     writer.writeheader()
     if num_processes == 1:
         for param_values in product(*[param_sweeps[p] for p in param_names]):
             params = dict(zip(param_names, param_values))
-            best_score, best_reqs = get_best_score(
+            guid, best_score, best_reqs = get_best_score(
                 experiment, params, min_lateral_speed, vertical_speed
             )
             log_func = results_logger(params, writer, output_file)
-            log_func((best_score, best_reqs))
+            log_func((guid, best_score, best_reqs))
     else:
         pool = Pool(num_processes)
 
@@ -174,7 +174,7 @@ def main():
         "-l", "--list", action="store_true", help="list available experiments"
     )
     parser.add_argument(
-        "-m", "--min-speed", help="minimum lateral speed", default=35, type=int
+        "-m", "--min-speed", help="minimum lateral speed", default=48, type=int
     )
     parser.add_argument(
         "--vertical-speed",
