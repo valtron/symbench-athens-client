@@ -8,6 +8,7 @@ This script tries to find optimal parameter assignments for FDM experiments
 approximator.
 """
 import argparse
+import csv
 import logging
 import sys
 from csv import DictWriter
@@ -22,7 +23,12 @@ from symbench_athens_client.fdm_experiments import (
     get_experiments,
 )
 
+# There's a get_logger function in symbench_athens_client.utils (If so desired)
 log = logging.getLogger("fdm_optimizer")
+
+
+# Question>> Instead of hopelessly searching for the whole range, why don't we start from the point
+# that gives us the best score so far and slide left and right based the baseline base result?
 
 param_sweeps = {
     "arm_length": np.linspace(180, 600, 10),
@@ -48,6 +54,7 @@ def get_best_score(experiment, params, min_lateral_speed, vertical_speed):
         req_vertical_speed: vertical_speed,
     }
     max_lateral_speed = 50
+    score = 0.0
 
     while reqs[req_lateral_speed] <= max_lateral_speed:
         result = experiment.run_for(
@@ -60,15 +67,41 @@ def get_best_score(experiment, params, min_lateral_speed, vertical_speed):
             best_reqs = reqs.copy()
         reqs[req_lateral_speed] += 1
 
+        # These file operations seem too expensive, we might have to consider an alternative?
+        should_write_header = False
+        if not (experiment.results_dir / "output.csv").exists():
+            should_write_header = True
+
+        with open(experiment.results_dir / "output.csv", "a", newline="") as csv_file:
+            op_writer = csv.DictWriter(csv_file, fieldnames=result.keys())
+            if should_write_header:
+                op_writer.writeheader()
+            op_writer.writerow(result)
+
     return score, best_reqs
+
+
+def results_logger(params, writer, output_file):
+    def write_and_log(results):
+        nonlocal params
+        nonlocal writer
+        best_score, best_reqs = results
+
+        log.info(f"best score for {params}: {best_score} at {best_reqs}")
+        writer.writerow({"score": best_score, **params, **best_reqs})
+        output_file.flush()
+
+    return write_and_log
+
+
+def error_logger(error):
+    log.error(error)
 
 
 def optimize(
     experiment, min_lateral_speed, vertical_speed, output_file, num_processes=1
 ):
     """Find the best parameters for the given experiment"""
-    experiment.start_new_session()
-
     assert req_lateral_speed in experiment.valid_requirements
     assert req_vertical_speed in experiment.valid_requirements
 
@@ -85,19 +118,19 @@ def optimize(
             best_score, best_reqs = get_best_score(
                 experiment, params, min_lateral_speed, vertical_speed
             )
-            log.info(f"best score for {params}: {best_score} at {best_reqs}")
-            writer.writerow({"score": best_score, **params, **best_reqs})
-            output_file.flush()
+            log_func = results_logger(params, writer, output_file)
+            log_func((best_score, best_reqs))
     else:
         pool = Pool(num_processes)
-        results = []
+
         count = 0
         for param_values in product(*[param_sweeps[p] for p in param_names]):
             params = dict(zip(param_names, param_values))
             log.debug(
                 f"Started for {params}, 'lateral_speed': {min_lateral_speed}, 'vertical_speed': {vertical_speed}"
             )
-            result = pool.apply_async(
+
+            pool.apply_async(
                 get_best_score,
                 kwds={
                     "experiment": experiment,
@@ -105,19 +138,17 @@ def optimize(
                     "min_lateral_speed": min_lateral_speed,
                     "vertical_speed": vertical_speed,
                 },
+                callback=results_logger(params, writer, output_file),
+                error_callback=error_logger,
             )
-            results.append(result)
+
             # ToDo: Remove test code
             count += 1
-            if count == 100:
+            if count == 1000:
                 break
 
         pool.close()
         pool.join()
-
-        for result in results:
-            # ToDo: AsyncResult will have what?
-            print(result.get())
 
 
 def main():
@@ -167,8 +198,11 @@ def main():
         else:
             experiment_name = args.experiment
 
+    experiment = get_experiment_by_name(experiment_name)
+    experiment.start_new_session()
+
     if args.output is None:
-        args.output = f"{experiment_name}_opt.csv"
+        args.output = f"{experiment.results_dir}/{experiment_name}_best_results.csv"
 
     # if Path(args.output).exists():
     #     # better not to automatically overwrite these valuable files
@@ -179,7 +213,7 @@ def main():
 
     with open(args.output, "w", newline="") as output_file:
         optimize(
-            get_experiment_by_name(experiment_name),
+            experiment,
             args.min_speed,
             args.vertical_speed,
             output_file,
