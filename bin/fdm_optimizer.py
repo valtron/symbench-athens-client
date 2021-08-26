@@ -50,13 +50,14 @@ def get_best_score(experiment, params, min_lateral_speed, vertical_speed):
     """Find the best score with a design point (trying to fly the fastest)"""
     best_score = 0
     best_reqs = reqs = {
-        req_lateral_speed: min_lateral_speed,
+        req_lateral_speed: min_lateral_speed - 1,
         req_vertical_speed: vertical_speed,
     }
     max_lateral_speed = 50
     score = 0.0
 
     while reqs[req_lateral_speed] <= max_lateral_speed:
+        reqs[req_lateral_speed] += 1
         result = experiment.run_for(
             params, reqs, change_dir=True, write_to_output_csv=False
         )
@@ -65,7 +66,7 @@ def get_best_score(experiment, params, min_lateral_speed, vertical_speed):
         if score > best_score:
             best_score = score
             best_reqs = reqs.copy()
-        reqs[req_lateral_speed] += 1
+
 
         # These file operations seem too expensive, we might have to consider an
         # alternative (Maybe generate output.csv later)
