@@ -1,5 +1,7 @@
 import logging
+import zipfile
 from functools import lru_cache
+from pathlib import Path
 from typing import Iterable
 
 from uav_analysis.mass_properties import quad_copter_fixed_bemp2
@@ -57,7 +59,7 @@ def estimate_mass_formulae(tb_data_loc):
     return quad_copter_fixed_bemp2(tb_data)
 
 
-def get_mass_estimates_for_quadcopter(testbench_data_path, quad_copter):
+def get_mass_estimates_for_quadcopter(testbench_path_or_formulae, quad_copter):
     """Given a quadcopter seed design, calculate the mass properties using creo surrogate estimator.
 
     Parameters
@@ -81,7 +83,11 @@ def get_mass_estimates_for_quadcopter(testbench_data_path, quad_copter):
     aircraft_parameters = quad_copter.dict(
         by_alias=True, include=quad_copter.__design_vars__
     )
-    formulae = estimate_mass_formulae(testbench_data_path)
+
+    if isinstance(testbench_path_or_formulae, (str, Path)):
+        formulae = estimate_mass_formulae(testbench_path_or_formulae)
+    else:
+        formulae = testbench_path_or_formulae
 
     mass_properties = {}
     for key, value in formulae.items():
@@ -92,3 +98,17 @@ def get_mass_estimates_for_quadcopter(testbench_data_path, quad_copter):
             mass_properties[mass_estimates_key] = value
 
     return mass_properties
+
+
+def extract_from_zip(zip_path, output_dir, files):
+    if not isinstance(zip_path, Path):
+        zip_path = Path(zip_path).resolve()
+
+    assert zip_path.exists(), "The provided path doesn't exist"
+    assert zipfile.is_zipfile(zip_path), "The provided file is not a zip file"
+
+    with zip_path.open("rb") as zip_path_bin:
+        with zipfile.ZipFile(zip_path_bin) as zip_file:
+            for file in zip_file.namelist():
+                if file in files:
+                    zip_file.extract(file, output_dir)

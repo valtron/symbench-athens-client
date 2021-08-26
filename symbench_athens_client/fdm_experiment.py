@@ -1,10 +1,23 @@
+import os
 from datetime import datetime
 from pathlib import Path
+from shutil import move, rmtree
+from tempfile import mkdtemp
+from uuid import uuid4
 
 from uav_analysis.testbench_data import TestbenchData
 
-from symbench_athens_client.fdm_executor import execute_fd_all_paths
-from symbench_athens_client.utils import get_logger
+from symbench_athens_client.fdm_executor import (
+    FDMExecutor,
+    cleanup_score_files,
+    update_total_score,
+    write_output_csv,
+)
+from symbench_athens_client.utils import (
+    estimate_mass_formulae,
+    extract_from_zip,
+    get_logger,
+)
 
 
 class FlightDynamicsExperiment:
@@ -54,32 +67,52 @@ class FlightDynamicsExperiment:
         propellers_data,
         valid_parameters,
         valid_requirements,
+        fdm_path=None,
     ):
+        self.testbench_path, self.propellers_data = self._validate_files(
+            testbench_path, propellers_data
+        )  # ToDo: More robust Validation here
         self.design = design
-        self.testbench_path = testbench_path
-        self.propellers_data = propellers_data
         self.valid_parameters = valid_parameters
         self.valid_requirements = valid_requirements
         self.logger = get_logger(self.__class__.__name__)
-        self._validate_files()
         self.session_id = f"e-{datetime.now().isoformat()}".replace(":", "-")
-        self.results_dir = f"results/{self.design.__class__.__name__}/{self.session_id}"
+        self.executor = FDMExecutor(fdm_path=fdm_path)
+        self.results_dir = Path(
+            f"results/{self.design.__class__.__name__}/{self.session_id}"
+        ).resolve()
+        self.formulae = estimate_mass_formulae(str(self.testbench_path))
 
-    def _validate_files(self):
-        assert (
-            Path(self.testbench_path).resolve().exists()
-        ), "The testbench data path doesn't exist"
-        assert (
-            Path(self.propellers_data).resolve().exists()
-        ), "The propellers data path doesn't exist"
-        tb = TestbenchData()
-        try:
-            tb.load(self.testbench_path)
-        except:
-            raise TypeError("The testbench data provided is not valid")
+    def _create_results_dir(self):
+        if not self.results_dir.exists():
+            os.makedirs(self.results_dir, exist_ok=True)
 
-    def run_for(self, parameters=None, requirements=None):
+        extract_from_zip(
+            self.testbench_path,
+            self.results_dir,
+            {
+                "componentMap.json",
+                "connectionMap.json",
+            },
+        )
+        (self.results_dir / ".generated").touch()
+
+        artifacts_dir = self.results_dir / "artifacts"
+        if not artifacts_dir.exists():
+            os.makedirs(artifacts_dir)
+
+    def start(self):
+        self._create_results_dir()
+
+    def run_for(
+        self,
+        parameters=None,
+        requirements=None,
+        change_dir=False,
+        write_to_output_csv=False,
+    ):
         """Run the flight dynamics for the given parameters and requirements"""
+
         parameters = self._validate_dict(parameters, "parameters")
         requirements = self._validate_dict(requirements, "requirements")
 
@@ -93,17 +126,83 @@ class FlightDynamicsExperiment:
             f"requirements: {requirements}"
         )
 
-        return execute_fd_all_paths(
-            design=self.design,
-            tb_data_location=self.testbench_path,
-            propellers_data_location=self.propellers_data,
-            output_dir=self.results_dir,
-            **requirements,
-        )
+        run_guid = str(uuid4())
+
+        fd_files_base_path = self.results_dir / "artifacts" / run_guid
+        os.makedirs(fd_files_base_path, exist_ok=True)
+
+        metrics = {"GUID": run_guid, "AnalysisError": None}
+        try:
+            current_dir = os.getcwd()
+            if change_dir:
+                temp_dir = mkdtemp()
+                os.chdir(temp_dir)
+
+            for i in [1, 3, 4, 5]:
+                fd_input_path = f"FlightDyn_Path{i}.inp"
+                fd_output_path = f"FlightDynReport_Path{i}.out"
+
+                self.design.to_fd_input(
+                    testbench_path_or_formulae=self.formulae,
+                    requested_vertical_speed=0
+                    if i != 4
+                    else requirements.get("requested_vertical_speed", -2),
+                    requested_lateral_speed=0
+                    if i == 4
+                    else int(requirements.get("requested_lateral_speed", 10)),
+                    flight_path=i,
+                    propellers_data_path=(str(self.propellers_data) + os.sep).replace(
+                        "\\", "/"
+                    ),
+                    filename=fd_input_path,
+                )
+
+                input_metrics, flight_metrics, path_metrics = self.executor.execute(
+                    str(fd_input_path), str(fd_output_path)
+                )
+
+                # Input Metrics
+                metrics.update(input_metrics.to_csv_dict())
+                other_metrics = self.design.parameters()
+                for key in other_metrics:
+                    if key.startswith("Length"):
+                        metrics[key] = other_metrics[key]
+
+                # Get the FlightPath metrics
+                metrics.update(flight_metrics.to_csv_dict())
+                metrics.update(path_metrics.to_csv_dict())
+
+                # Move input and output files to necessary locations
+                move(fd_input_path, fd_files_base_path)
+                move(fd_output_path, fd_files_base_path)
+                move("./metrics.out", fd_files_base_path / f"metrics_Path{i}.out")
+
+                # Remove metrics.out, score.out namemap.out
+                cleanup_score_files()
+
+            # Update the total score
+            update_total_score(metrics)
+            metrics["AnalysisError"] = False
+
+            if change_dir:
+                os.chdir(current_dir)
+                rmtree(temp_dir)
+
+        except Exception as e:
+            metrics["AnalysisError"] = True
+            raise e
+
+        if write_to_output_csv:
+            write_output_csv(output_dir=self.results_dir, metrics=metrics)
+
+        return metrics
 
     def start_new_session(self):
         self.session_id = f"e-{datetime.now().isoformat()}".replace(":", "-")
-        self.results_dir = f"results/{self.design.__class__.__name__}/{self.session_id}"
+        self.results_dir = Path(
+            f"results/{self.design.__class__.__name__}/{self.session_id}"
+        ).resolve()
+        self.start()
 
     @staticmethod
     def _validate_dict(var, name):
@@ -113,3 +212,19 @@ class FlightDynamicsExperiment:
             )
 
         return var or {}
+
+    @staticmethod
+    def _validate_files(testbench_path, propellers_data):
+        testbench_path = Path(testbench_path).resolve()
+        propellers_data = Path(propellers_data).resolve()
+        assert testbench_path.exists(), "The testbench data path doesn't exist"
+        assert (
+            propellers_data.resolve().exists()
+        ), "The propellers data path doesn't exist"
+        tb = TestbenchData()
+        try:
+            tb.load(str(testbench_path))
+        except:
+            raise TypeError("The testbench data provided is not valid")
+
+        return testbench_path, propellers_data
