@@ -9,7 +9,7 @@ from symbench_athens_client.models.fixed_bemp_designs import (
 # This is just provided for convenience
 
 
-def get_experiments_by_name(name):
+def get_experiment_by_name(name):
     experiments = {
         "ExperimentOnTurnigyGraphene5000MAHQuadCopter": dict(
             design=TurnigyGraphene5000MAHQuadCopter(),
@@ -31,3 +31,11 @@ def get_experiments_by_name(name):
         raise MissingExperimentError("The experiment {name} doesn't exist.")
 
     return FlightDynamicsExperiment(**experiments[name])
+
+
+# Note this is done for multiprocessing (no forking in windows :))
+def get_experiments():
+    return [
+        "ExperimentOnTurnigyGraphene5000MAHQuadCopter",
+        "ExperimentOnTurnigyGraphene6000MAHQuadCopter",
+    ]

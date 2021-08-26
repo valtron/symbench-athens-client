@@ -7,17 +7,20 @@ This script tries to find optimal parameter assignments for FDM experiments
 (i.e.) for designs for which we already we have a trained/fitted CAD
 approximator.
 """
-from math import exp
-import sys
 import argparse
 import logging
-from itertools import product
-from pathlib import Path
+import sys
 from csv import DictWriter
+from itertools import product
+from math import exp
+from multiprocessing import Pool
 
 import numpy as np
-from symbench_athens_client import fdm_experiments
-from symbench_athens_client.fdm_experiment import FlightDynamicsExperiment
+
+from symbench_athens_client.fdm_experiments import (
+    get_experiment_by_name,
+    get_experiments,
+)
 
 log = logging.getLogger("fdm_optimizer")
 
@@ -47,7 +50,9 @@ def get_best_score(experiment, params, min_lateral_speed, vertical_speed):
     max_lateral_speed = 50
 
     while reqs[req_lateral_speed] <= max_lateral_speed:
-        result = experiment.run_for(params, reqs)
+        result = experiment.run_for(
+            params, reqs, change_dir=True, write_to_output_csv=False
+        )
         max_lateral_speed = result["Max_Speed"]  # shorten this loop
         score = result["TotalPathScore"]
         if score > best_score:
@@ -58,31 +63,61 @@ def get_best_score(experiment, params, min_lateral_speed, vertical_speed):
     return score, best_reqs
 
 
-def optimize(experiment, min_lateral_speed, vertical_speed, output_file):
+def optimize(
+    experiment, min_lateral_speed, vertical_speed, output_file, num_processes=1
+):
     """Find the best parameters for the given experiment"""
+    experiment.start_new_session()
 
     assert req_lateral_speed in experiment.valid_requirements
     assert req_vertical_speed in experiment.valid_requirements
 
-    param_names = list(
-        set(param_sweeps.keys()) & set(experiment.valid_parameters)
-    )
+    param_names = list(set(param_sweeps.keys()) & set(experiment.valid_parameters))
 
     writer = DictWriter(
         output_file,
         ["score"] + param_names + [req_lateral_speed, req_vertical_speed],
     )
     writer.writeheader()
+    if num_processes == 1:
+        for param_values in product(*[param_sweeps[p] for p in param_names]):
+            params = dict(zip(param_names, param_values))
+            best_score, best_reqs = get_best_score(
+                experiment, params, min_lateral_speed, vertical_speed
+            )
+            log.info(f"best score for {params}: {best_score} at {best_reqs}")
+            writer.writerow({"score": best_score, **params, **best_reqs})
+            output_file.flush()
+    else:
+        pool = Pool(num_processes)
+        results = []
+        count = 0
+        for param_values in product(*[param_sweeps[p] for p in param_names]):
+            params = dict(zip(param_names, param_values))
+            log.debug(
+                f"Started for {params}, 'lateral_speed': {min_lateral_speed}, 'vertical_speed': {vertical_speed}"
+            )
+            result = pool.apply_async(
+                get_best_score,
+                kwds={
+                    "experiment": experiment,
+                    "params": params,
+                    "min_lateral_speed": min_lateral_speed,
+                    "vertical_speed": vertical_speed,
+                },
+            )
+            results.append(result)
+            # ToDo: Remove test code
+            count += 1
+            if count == 100:
+                break
 
-    for param_values in product(*[param_sweeps[p] for p in param_names]):
-        params = dict(zip(param_names, param_values))
+        pool.close()
+        pool.join()
 
-        best_score, best_reqs = get_best_score(
-            experiment, params, min_lateral_speed, vertical_speed
-        )
-        log.info(f"best score for {params}: {best_score} at {best_reqs}")
-        writer.writerow({"score": best_score, **params, **best_reqs})
-        output_file.flush()
+        for result in results:
+            # ToDo: AsyncResult will have what?
+            print(result.get())
 
 
 def main():
@@ -108,23 +143,23 @@ def main():
         action="store_true",
         help="increase output verbosity",
     )
+    parser.add_argument(
+        "-n",
+        "--num-processes",
+        help="The number of process pools to use. Default is 1 or don't use.",
+        type=int,
+        default=1,
+    )
     args = parser.parse_args()
 
-    experiments = {}
-    for name in dir(fdm_experiments):
-        obj = getattr(fdm_experiments, name)
-        if type(obj) == FlightDynamicsExperiment:
-            experiments[name] = obj
-
     if args.list:
-        print("\n".join(list(experiments.keys())))
+        print("\n".join(get_experiments()))
         sys.exit(0)
 
     if args.verbose:
         log.setLevel(logging.DEBUG)
 
-    experiment_names = list(experiments.keys())
-    experiment_name = experiment_names[0]
+    experiment_names = get_experiments()
     if args.experiment:
         if args.experiment not in experiment_names:
             log.error(f"experiment {args.experiment} is not available")
@@ -144,10 +179,11 @@ def main():
 
     with open(args.output, "w", newline="") as output_file:
         optimize(
-            experiments[experiment_name],
+            get_experiment_by_name(experiment_name),
             args.min_speed,
             args.vertical_speed,
             output_file,
+            num_processes=args.num_processes,
         )
 
 
