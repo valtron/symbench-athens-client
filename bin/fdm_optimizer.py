@@ -10,8 +10,8 @@ approximator.
 import argparse
 import csv
 import logging
-import sys
 import os
+import sys
 from csv import DictWriter
 from itertools import product
 from math import exp
@@ -83,7 +83,6 @@ def get_best_score(experiment, params, min_lateral_speed, vertical_speed):
             best_score = score
             best_reqs = reqs.copy()
 
-
         # These file operations seem too expensive, we might have to consider an
         # alternative (Maybe generate output.csv later)
         # should_write_header = False
@@ -144,7 +143,6 @@ def optimize(
     else:
         pool = Pool(num_processes)
 
-        count = 0
         for param_values in product(*[param_sweeps[p] for p in param_names]):
             params = dict(zip(param_names, param_values))
             log.debug(
@@ -162,11 +160,6 @@ def optimize(
                 callback=results_logger(params, writer, output_file),
                 error_callback=error_logger,
             )
-
-            # ToDo: Remove test code
-            count += 1
-            if count == 1000:
-                break
 
         pool.close()
         pool.join()
