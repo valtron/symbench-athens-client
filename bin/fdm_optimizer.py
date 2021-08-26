@@ -11,6 +11,7 @@ import argparse
 import csv
 import logging
 import sys
+import os
 from csv import DictWriter
 from itertools import product
 from math import exp
@@ -94,6 +95,7 @@ def results_logger(params, writer, output_file):
         log.info(f"best score for {params}: {best_score} at {best_reqs}")
         writer.writerow({"score": best_score, **params, **best_reqs})
         output_file.flush()
+        os.fsync(output_file.fileno())
 
     return write_and_log
 
