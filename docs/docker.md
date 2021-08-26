@@ -11,7 +11,9 @@ We have created a docker based solution that pre-packages the flight dynamics to
 
 
 ## Deployment Instructions (Manual)
-In your system, download the volume (Containing the `propellers` data and `CREO-Surrogate` testbench data) using the following [`url`](https://vanderbilt.box.com/v/fdm-volume-data). Unzip the file and save it to a reachable path in your system.
+~~In your system, download the volume (Containing the `propellers` data and `CREO-Surrogate` testbench data) using the following [`url`](https://vanderbilt.box.com/v/fdm-volume-data). Unzip the file and save it to a reachable path in your system.~~
+
+In your system, download the contents of [`Symbench Library\TA3 - SwRI Information\FDMdata`](https://drive.google.com/drive/folders/10EH32A41V20o1WhJTC7UQP0TPrKJY7th) (containing the `propellers` data and `CREO-Surrogate` testbench data) to a reachable path in your system
 
 After unzipping the file, use the copy the following contents to a file `docker-compose.yaml` and replace `YOUR_PATH` with the location that you unzipped the file to.
 
