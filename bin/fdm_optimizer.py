@@ -198,8 +198,9 @@ def main():
         if args.experiment not in experiment_names:
             log.error(f"experiment {args.experiment} is not available")
             sys.exit(-1)
-        else:
-            experiment_name = args.experiment
+        experiment_name = args.experiment
+    else:
+        experiment_name = experiment_names[0]
 
     experiment = get_experiment_by_name(experiment_name)
     experiment.start_new_session()
