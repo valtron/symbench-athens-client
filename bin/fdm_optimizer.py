@@ -67,16 +67,17 @@ def get_best_score(experiment, params, min_lateral_speed, vertical_speed):
             best_reqs = reqs.copy()
         reqs[req_lateral_speed] += 1
 
-        # These file operations seem too expensive, we might have to consider an alternative?
-        should_write_header = False
-        if not (experiment.results_dir / "output.csv").exists():
-            should_write_header = True
-
-        with open(experiment.results_dir / "output.csv", "a", newline="") as csv_file:
-            op_writer = csv.DictWriter(csv_file, fieldnames=result.keys())
-            if should_write_header:
-                op_writer.writeheader()
-            op_writer.writerow(result)
+        # These file operations seem too expensive, we might have to consider an
+        # alternative (Maybe generate output.csv later)
+        # should_write_header = False
+        # if not (experiment.results_dir / "output.csv").exists():
+        #     should_write_header = True
+        #
+        # with open(experiment.results_dir / "output.csv", "a", newline="") as csv_file:
+        #     op_writer = csv.DictWriter(csv_file, fieldnames=result.keys())
+        #     if should_write_header:
+        #         op_writer.writeheader()
+        #     op_writer.writerow(result)
 
     return score, best_reqs
 
