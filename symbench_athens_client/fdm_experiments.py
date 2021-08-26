@@ -3,6 +3,7 @@ from symbench_athens_client.fdm_experiment import FlightDynamicsExperiment
 from symbench_athens_client.models.fixed_bemp_designs import (
     TurnigyGraphene5000MAHQuadCopter,
     TurnigyGraphene6000MAHQuadCopter,
+    QuadCopter_5,
 )
 
 # Note this will not work, unless you have the correct paths.
@@ -25,6 +26,13 @@ def get_experiment_by_name(name):
             valid_parameters=TurnigyGraphene6000MAHQuadCopter.__design_vars__,
             valid_requirements={"requested_vertical_speed", "requested_lateral_speed"},
         ),
+        "QuadCopter_5": dict(
+            design=QuadCopter_5(),
+            testbench_path="./testbenches/QuadCopter_5.zip",
+            propellers_data="./propellers/",
+            valid_parameters=QuadCopter_5.__design_vars__,
+            valid_requirements={"requested_vertical_speed", "requested_lateral_speed"},
+        ),
     }
 
     if name not in experiments:
@@ -38,4 +46,5 @@ def get_experiments():
     return [
         "ExperimentOnTurnigyGraphene5000MAHQuadCopter",
         "ExperimentOnTurnigyGraphene6000MAHQuadCopter",
+        "QuadCopter_5",
     ]

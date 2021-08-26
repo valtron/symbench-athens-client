@@ -31,15 +31,15 @@ log = logging.getLogger("fdm_optimizer")
 # that gives us the best score so far and slide left and right based the baseline base result?
 
 param_sweeps = {
-    "arm_length": np.linspace(180, 600, 10),
-    "support_length": np.linspace(10, 100, 5),
-    "batt_mount_x_offset": np.linspace(-20, 20, 10),
-    "batt_mount_z_offset": np.linspace(-20, 20, 10),
+    "arm_length": np.linspace(300, 600, 10),
+    "support_length": np.linspace(1, 30, 5),
+    "batt_mount_x_offset": [0],
+    "batt_mount_z_offset": np.linspace(10, 50, 10),
     "q_position": [1.0],
     "q_angles": [1.0],
     "q_velocity": [1.0],
     "q_angular_velocity": [1.0],
-    "r": np.geomspace(0.1, 100.0, 10),
+    "r": np.geomspace(10.0, 1000.0, 10),
 }
 
 req_lateral_speed = "requested_lateral_speed"
