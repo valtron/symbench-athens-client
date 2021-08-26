@@ -143,5 +143,6 @@ cython_debug/
 # For any anaconda git installs
 src/
 
-# Testbench data
+# Testbench and results 
 data/testbenches/*.zip
+data/results
