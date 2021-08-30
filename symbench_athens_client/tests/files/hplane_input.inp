@@ -1,0 +1,216 @@
+&aircraft_data
+   aircraft%cname          = 'UAV'      ! M  name of aircraft
+   aircraft%ctype          = 'SymCPS UAV Design' ! M  type of aircraft
+   aircraft%num_wings      = 2 ! M number of wings in aircraft
+   aircraft%mass          = 2.729888450734746
+   aircraft%x_cm          = 46.31692567520146
+   aircraft%y_cm          = 0.16496910005986176
+   aircraft%z_cm          = -23.405671386550907
+   aircraft%x_fuse          = 46.31692567520146
+   aircraft%y_fuse          = 0.16496910005986176
+   aircraft%z_fuse          = -23.405671386550907
+   aircraft%X_fuseuu      = 4160.179274859671
+   aircraft%Y_fusevv      = 25204.13201711869
+   aircraft%Z_fuseww      = 31125.170166609518
+   aircraft%Ixx           = 127438.8048796813
+   aircraft%Iyy           = 660551.4129423498
+   aircraft%Izz           = 782006.8585281011
+   aircraft%Ixy           = -789.9455882059922
+   aircraft%Ixz           = -6346.200685243803
+   aircraft%Iyz           = -9.531424531304378
+   aircraft%uc_initial     = 0.4d0, 0.5d0, 0.6d0, 0.7d0 ! inputs for controls
+   aircraft%time           = 0.d0        ! initial time (default = 0.)
+   aircraft%dt             = 1.d-03      ! s  fixed time step
+   aircraft%dt_output      = 1.0d0       ! s  time between output lines
+   aircraft%time_end       = 1000.d0        ! s  end time
+   aircraft%Unwind         = 0.d0        ! North wind speed in world frame
+   aircraft%Vewind         = 0.d0        ! East wind speed in  world frame
+   aircraft%Wdwind         = 0.d0        ! Down wind speed in world frame
+   aircraft%debug          = 0           ! verbose printouts from fderiv
+   aircraft%num_propellers  = 5
+   aircraft%num_batteries   = 1
+   aircraft%i_analysis_type = 3
+   aircraft%x_initial      = 0.d0, 0.d0, 0.d0, 0.d0, 0.d0, 0.d0, 1.d0, 0.d0, 0.d0, 0.d0, 0.d0, 0.d0, 0.d0
+   aircraft%uc_initial     = 0.5d0, 0.5d0, 0.5d0, 0.5d0
+
+!   Propeller(1 uses components named Rear_Prop_R, Rear_Motor_R, Rear_ESC_R
+   propeller(1)%cname   = 'apc_propellers_10x5E'
+   propeller(1)%ctype   = 'MR'
+   propeller(1)%prop_fname   = '../../../Tables/PropData/PER3_10x5E.dat'
+   propeller(1)%x   = -745.5444084969597
+   propeller(1)%y   = -340.63999999999993
+   propeller(1)%z   = -35.56166666666681
+   propeller(1)%nx   = -0.0
+   propeller(1)%ny   = -0.0
+   propeller(1)%nz   = -1.0
+   propeller(1)%radius   = 127.0
+   propeller(1)%Ir      = 107.52666666666666
+   propeller(1)%motor_fname  = '../../Motors/MN3510KV360'
+   propeller(1)%KV   = 360.0
+   propeller(1)%KT   = 0.026525823848649224
+   propeller(1)%I_max   = 15.0
+   propeller(1)%I_idle   = 0.4
+   propeller(1)%maxpower   = 330.0
+   propeller(1)%Rw   = 0.188
+   propeller(1)%icontrol   = 4
+!   propeller(1)%ibattery   = 1
+   propeller(1)%ibattery   = 1
+   propeller(1)%spin   = 1
+
+!   Propeller(2 uses components named Front_Prop_L, Front_Motor_L, Front_ESC_L
+   propeller(2)%cname   = 'apc_propellers_10x5E'
+   propeller(2)%ctype   = 'MR'
+   propeller(2)%prop_fname   = '../../../Tables/PropData/PER3_10x5E.dat'
+   propeller(2)%x   = 745.5444084969597
+   propeller(2)%y   = 340.63999999999993
+   propeller(2)%z   = -35.56166666666682
+   propeller(2)%nx   = -0.0
+   propeller(2)%ny   = -0.0
+   propeller(2)%nz   = -1.0
+   propeller(2)%radius   = 127.0
+   propeller(2)%Ir      = 107.52666666666666
+   propeller(2)%motor_fname  = '../../Motors/MN3510KV360'
+   propeller(2)%KV   = 360.0
+   propeller(2)%KT   = 0.026525823848649224
+   propeller(2)%I_max   = 15.0
+   propeller(2)%I_idle   = 0.4
+   propeller(2)%maxpower   = 330.0
+   propeller(2)%Rw   = 0.188
+   propeller(2)%icontrol   = 5
+!   propeller(2)%ibattery   = 1
+   propeller(2)%ibattery   = 1
+   propeller(2)%spin   = 1
+
+!   Propeller(3 uses components named Rear_Prop_L, Rear_Motor_L, Rear_ESC_L
+   propeller(3)%cname   = 'apc_propellers_10x5EP'
+   propeller(3)%ctype   = 'MR'
+   propeller(3)%prop_fname   = '../../../Tables/PropData/PER3_10x5E.dat'
+   propeller(3)%x   = -745.5444084969596
+   propeller(3)%y   = 340.63999999999993
+   propeller(3)%z   = -35.56166666666661
+   propeller(3)%nx   = -0.0
+   propeller(3)%ny   = -0.0
+   propeller(3)%nz   = -1.0
+   propeller(3)%radius   = 127.0
+   propeller(3)%Ir      = 107.52666666666666
+   propeller(3)%motor_fname  = '../../Motors/MN3510KV360'
+   propeller(3)%KV   = 360.0
+   propeller(3)%KT   = 0.026525823848649224
+   propeller(3)%I_max   = 15.0
+   propeller(3)%I_idle   = 0.4
+   propeller(3)%maxpower   = 330.0
+   propeller(3)%Rw   = 0.188
+   propeller(3)%icontrol   = 3
+!   propeller(3)%ibattery   = 1
+   propeller(3)%ibattery   = 1
+   propeller(3)%spin   = -1
+
+!   Propeller(4 uses components named Front_Prop_C, Front_Motor_C, Front_ESC_C
+   propeller(4)%cname   = 'apc_propellers_10x5E'
+   propeller(4)%ctype   = 'MR'
+   propeller(4)%prop_fname   = '../../../Tables/PropData/PER3_10x5E.dat'
+   propeller(4)%x   = 791.2660751636263
+   propeller(4)%y   = 3.151989382326963e-15
+   propeller(4)%z   = 10.160000000000187
+   propeller(4)%nx   = 1.0
+   propeller(4)%ny   = 6.123233995736757e-17
+   propeller(4)%nz   = -0.0
+   propeller(4)%radius   = 127.0
+   propeller(4)%Ir      = 107.52666666666666
+   propeller(4)%motor_fname  = '../../Motors/MN3510KV360'
+   propeller(4)%KV   = 360.0
+   propeller(4)%KT   = 0.026525823848649224
+   propeller(4)%I_max   = 15.0
+   propeller(4)%I_idle   = 0.4
+   propeller(4)%maxpower   = 330.0
+   propeller(4)%Rw   = 0.188
+   propeller(4)%icontrol   = 1
+!   propeller(4)%ibattery   = 1
+   propeller(4)%ibattery   = 1
+   propeller(4)%spin   = 1
+
+!   Propeller(5 uses components named Front_Prop_R, Front_Motor_R, Front_ESC_R
+   propeller(5)%cname   = 'apc_propellers_10x5EP'
+   propeller(5)%ctype   = 'MR'
+   propeller(5)%prop_fname   = '../../../Tables/PropData/PER3_10x5E.dat'
+   propeller(5)%x   = 745.5444084969597
+   propeller(5)%y   = -340.63999999999993
+   propeller(5)%z   = -35.561666666666596
+   propeller(5)%nx   = -0.0
+   propeller(5)%ny   = -0.0
+   propeller(5)%nz   = -1.0
+   propeller(5)%radius   = 127.0
+   propeller(5)%Ir      = 107.52666666666666
+   propeller(5)%motor_fname  = '../../Motors/MN3510KV360'
+   propeller(5)%KV   = 360.0
+   propeller(5)%KT   = 0.026525823848649224
+   propeller(5)%I_max   = 15.0
+   propeller(5)%I_idle   = 0.4
+   propeller(5)%maxpower   = 330.0
+   propeller(5)%Rw   = 0.188
+   propeller(5)%icontrol   = 2
+!   propeller(5)%ibattery   = 1
+   propeller(5)%ibattery   = 1
+   propeller(5)%spin   = -1
+
+!   Battery(1) is component named: Battery_0
+   battery(1)%num_cells   = 6
+   battery(1)%voltage   = 22.2
+   battery(1)%capacity   = 6000
+   battery(1)%C_Continuous   = 75
+   battery(1)%C_Peak   = 150
+
+!   Wing (1) is component named: Right_Wing
+   wing(1)%surface_area   = 154838.4
+   wing(1)%a   = 0.102
+   wing(1)%C_L0   = 0.0102
+   wing(1)%C_Lmax   = 0.88
+   wing(1)%C_Lmin   = -0.88
+   wing(1)%C_D0   = 0.0065
+   wing(1)%k   = 0.11234476060548583
+   wing(1)%C_Dfp   = 1
+   wing(1)%bias1   = 0.5
+   wing(1)%bias2   = 0.5
+   wing(1)%icontrol1 = 6
+   wing(1)%icontrol2 = 7
+   wing(1)%tau_a = 0.4
+   wing(1)%x   = 4.263256414560601e-14
+   wing(1)%y   = 254.0
+   wing(1)%z   = -92.08129599999998
+   wing(1)%nx   = 0.0
+   wing(1)%ny   = -0.0
+   wing(1)%nz   = -1.0
+
+!   Wing (2) is component named: Left_Wing
+   wing(2)%surface_area   = 154838.4
+   wing(2)%a   = 0.102
+   wing(2)%C_L0   = 0.0102
+   wing(2)%C_Lmax   = 0.88
+   wing(2)%C_Lmin   = -0.88
+   wing(2)%C_D0   = 0.0065
+   wing(2)%k   = 0.11234476060548583
+   wing(2)%C_Dfp   = 1
+   wing(2)%bias1   = -0.5
+   wing(2)%bias2   = 0.5
+   wing(2)%icontrol1 = 8
+   wing(2)%icontrol2 = 9
+   wing(2)%tau_a = 0.4
+   wing(2)%x   = 1.4210854715202004e-14
+   wing(2)%y   = -254.0
+   wing(2)%z   = -92.081296
+   wing(2)%nx   = 0.0
+   wing(2)%ny   = -0.0
+   wing(2)%nz   = -1.0
+
+!   Controls
+   control%i_flight_path = 1
+   control%requested_lateral_speed = 16.0
+   control%requested_vertical_speed = 2.0
+   control%iaileron = 6
+   control%iflap = 7
+   control%Q_position = 1.0
+   control%Q_velocity = 1.0
+   control%Q_angular_velocity = 1.0
+   control%Q_angles = 1.0
+   control%R= 1.0
+/
