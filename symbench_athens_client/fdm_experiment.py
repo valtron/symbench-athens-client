@@ -1,19 +1,24 @@
+import json
 import os
 from datetime import datetime
 from pathlib import Path
-from shutil import move, rmtree
-from tempfile import mkdtemp
+from shutil import move
 from uuid import uuid4
 
+from uav_analysis.mass_properties import quad_copter_batt_prop, quad_copter_fixed_bemp2
 from uav_analysis.testbench_data import TestbenchData
 
+from symbench_athens_client.exceptions import PropellerAssignmentError
 from symbench_athens_client.fdm_executor import (
     FDMExecutor,
     cleanup_score_files,
     update_total_score,
     write_output_csv,
 )
+from symbench_athens_client.models.components import Batteries, Battery, Propellers
+from symbench_athens_client.models.designs import QuadCopter
 from symbench_athens_client.utils import (
+    assign_propellers_quadcopter,
     estimate_mass_formulae,
     extract_from_zip,
     get_logger,
@@ -41,10 +46,14 @@ class FlightDynamicsExperiment:
     ----------
     design: symbench_athens_client.models.design.SeedDesign
         The design instance to run this experiment on
-    testbench_path: str, pathlib.Path
+    testbenches: str, pathlib.Path or list/set/tuple thereof
         The location of the testbench data for estimating mass properties of a design
     propellers_data: str, pathlib.Path
         The location of the propellers data
+    fdm_path: str, pathlib.Path
+        The location of the fdm executable, if None, its assumed to be in PATH
+    estimator: function, optional, default=None
+        The estimator function from uav_analyisis library to use, If None, quadcopter_fixed_bemp2 is used.
 
     Attributes
     ----------
@@ -64,14 +73,15 @@ class FlightDynamicsExperiment:
     def __init__(
         self,
         design,
-        testbench_path,
+        testbenches,
         propellers_data,
         valid_parameters,
         valid_requirements,
         fdm_path=None,
+        estimator=None,
     ):
-        self.testbench_path, self.propellers_data = self._validate_files(
-            testbench_path, propellers_data
+        self.testbenches, self.propellers_data = self._validate_files(
+            testbenches, propellers_data
         )  # ToDo: More robust Validation here
         self.design = design
         self.valid_parameters = valid_parameters
@@ -82,25 +92,53 @@ class FlightDynamicsExperiment:
         self.results_dir = Path(
             f"results/{self.design.__class__.__name__}/{self.session_id}"
         ).resolve()
-        self.formulae = estimate_mass_formulae(str(self.testbench_path))
+        self.formulae = estimate_mass_formulae(
+            frozenset(self.testbenches),
+            estimator=estimator or quad_copter_fixed_bemp2,
+        )
+        self.start_new_session()
 
     def _create_results_dir(self):
         if not self.results_dir.exists():
             os.makedirs(self.results_dir, exist_ok=True)
 
+        (self.results_dir / ".generated").touch()
+        self._add_component_and_connection_map()
+
+        artifacts_dir = self.results_dir / "artifacts"
+
+        if not artifacts_dir.exists():
+            os.makedirs(artifacts_dir)
+
+    def _add_component_and_connection_map(self):
         extract_from_zip(
-            self.testbench_path,
+            self.testbenches[0],
             self.results_dir,
             {
                 "componentMap.json",
                 "connectionMap.json",
             },
         )
-        (self.results_dir / ".generated").touch()
 
-        artifacts_dir = self.results_dir / "artifacts"
-        if not artifacts_dir.exists():
-            os.makedirs(artifacts_dir)
+        self._customize_components()
+
+    def _customize_components(self, out_dir=None):
+        with (self.results_dir / "componentMap.json").open("r") as components_file:
+            components = json.load(components_file)
+            design_components = self.design.components(by_alias=True)
+            for component in components:
+                if component["FROM_COMP"] in design_components:
+                    component["LIB_COMPONENT"] = design_components[
+                        component["FROM_COMP"]
+                    ]
+
+        if out_dir is None:
+            out_dir = self.results_dir
+
+        with (out_dir / "componentMap.json").open("w") as components_file:
+            json.dump(components, components_file)
+
+        self.design.swap_list = {}
 
     def start(self):
         self._create_results_dir()
@@ -131,6 +169,9 @@ class FlightDynamicsExperiment:
 
         fd_files_base_path = self.results_dir / "artifacts" / run_guid
         os.makedirs(fd_files_base_path, exist_ok=True)
+
+        if self.design.swap_list != dict():
+            self._customize_components(fd_files_base_path)
 
         metrics = {"GUID": run_guid, "AnalysisError": None}
         try:
@@ -216,17 +257,131 @@ class FlightDynamicsExperiment:
         return var or {}
 
     @staticmethod
-    def _validate_files(testbench_path, propellers_data):
-        testbench_path = Path(testbench_path).resolve()
+    def _validate_files(testbenches, propellers_data):
+        if isinstance(testbenches, (list, set, tuple)):
+            assert all(
+                Path(testbench).resolve().exists() for testbench in testbenches
+            ), "Testbench data paths are not valid"
+        else:
+            testbenches = Path(testbenches).resolve()
+            assert testbenches.exists(), "The testbench data path doesn't exist"
+            testbenches = [testbenches]
+
         propellers_data = Path(propellers_data).resolve()
-        assert testbench_path.exists(), "The testbench data path doesn't exist"
         assert (
             propellers_data.resolve().exists()
         ), "The propellers data path doesn't exist"
         tb = TestbenchData()
         try:
-            tb.load(str(testbench_path))
+            for d in testbenches:
+                tb.load(str(d))
         except:
             raise TypeError("The testbench data provided is not valid")
 
-        return testbench_path, propellers_data
+        return testbenches, propellers_data
+
+
+class QuadCopterVariableBatteryPropExperiment(FlightDynamicsExperiment):
+    """Subclasses FlightDynamicsExperiment for propellers/batteries swapping ability.
+
+    Parameters
+    ----------
+    testbenches: str, list of str or paths
+        The testbenches path for this experiment
+    propellers_data: str, pathlib.Path
+        The propellers data path
+    fdm_path: str, pathlib.Path
+        The location of the fdm executable, if None, its assumed to be in PATH
+    """
+
+    def __init__(
+        self,
+        testbenches,
+        propellers_data,
+        fdm_path=None,
+    ):
+        design = QuadCopter()
+        valid_parameters = design.__design_vars__
+        valid_requirements = {"requested_vertical_speed", "requested_lateral_speed"}
+        super().__init__(
+            design,
+            testbenches,
+            propellers_data,
+            valid_parameters,
+            valid_requirements,
+            fdm_path=fdm_path,
+            estimator=quad_copter_batt_prop,
+        )
+        self._run_tester = self.design.copy(deep=True)
+        self._available_propellers = None
+
+    @property
+    def battery(self):
+        return self.design.battery_0
+
+    @battery.setter
+    def battery(self, batt):
+        if isinstance(batt, str):
+            batt = Batteries[batt]
+        self._assign_battery(self.design, batt)
+
+    @property
+    def propeller(self):
+        return self.design.propeller_0
+
+    @propeller.setter
+    def propeller(self, prop):
+        assign_propellers_quadcopter(self.design, prop)
+
+    @property
+    def available_batteries(self):
+        return Batteries.all
+
+    @property
+    def available_propellers(self):
+        if self._available_propellers is None:
+            self._available_propellers = list(
+                filter(lambda p: self.can_run_for(p), Propellers.all)
+            )
+        return self._available_propellers
+
+    def run_for(
+        self,
+        battery=None,
+        propeller=None,
+        parameters=None,
+        requirements=None,
+        change_dir=False,
+        write_to_output_csv=False,
+    ):
+        if isinstance(battery, str):
+            assert battery in self.available_batteries, "Battery name is not valid"
+            battery = Batteries[battery]
+
+        if battery is not None:
+            self._assign_battery(self.design, battery)
+
+        if propeller is not None:
+            assign_propellers_quadcopter(self.design, propeller)
+
+        return super().run_for(
+            parameters=parameters,
+            requirements=requirements,
+            change_dir=change_dir,
+            write_to_output_csv=write_to_output_csv,
+        )
+
+    def can_run_for(self, propeller):
+        """Given a propeller, find if the design will fly based on components available."""
+        try:
+            assign_propellers_quadcopter(self._run_tester, propeller)
+            return True
+        except PropellerAssignmentError:
+            return False
+
+    @staticmethod
+    def _assign_battery(design, battery):
+        assert isinstance(
+            battery, Battery
+        ), f"Provided {battery} is not a Battery component"
+        design.battery_0 = battery

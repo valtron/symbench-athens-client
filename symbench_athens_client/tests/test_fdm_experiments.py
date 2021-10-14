@@ -8,6 +8,7 @@ import minio
 import pytest
 
 from symbench_athens_client.fdm_experiments import get_experiments_by_name
+from symbench_athens_client.models.components import Batteries, Motors, Propellers
 
 
 @pytest.mark.slow
@@ -89,3 +90,46 @@ class TestFDMExperiments:
         )
 
         assert results["TotalPathScore"] == 1582
+
+    def test_fd_execution_variable_battery_quad(self):
+        expr = get_experiments_by_name("QuadCopterVariableBatteryPropExperiment")
+        expr.start_new_session()
+        expr.design.motor_0 = Motors["t_motor_MN4012KV400"]
+        expr.design.motor_1 = Motors["t_motor_MN4012KV400"]
+        expr.design.motor_2 = Motors["t_motor_MN4012KV400"]
+        expr.design.motor_3 = Motors["t_motor_MN4012KV400"]
+
+        expr.battery = Batteries["TurnigyGraphene6000mAh6S75C"]
+
+        expr.propeller = Propellers["apc_propellers_16x4EP"]
+        assert (
+            expr.design.propeller_0
+            == Propellers["apc_propellers_16x4EP"]
+            == expr.design.propeller_2
+        )
+        assert (
+            expr.design.propeller_1
+            == Propellers["apc_propellers_16x4E"]
+            == expr.design.propeller_3
+        )
+
+        results = expr.run_for(
+            parameters={
+                "arm_length": 400,
+                "support_length": 20,
+                "batt_mount_z_offset": 30,
+                "r": 100.0,
+            },
+            requirements={
+                "requested_vertical_speed": -2,
+                "requested_lateral_speed": 40,
+            },
+        )
+
+        assert results["TotalPathScore"] == 1565.0
+
+    def test_fd_execution_can_run_for(self):
+        expr = get_experiments_by_name("QuadCopterVariableBatteryPropExperiment")
+        assert expr.can_run_for("apc_propellers_16x4EP")
+        assert expr.can_run_for("apc_propellers_16x4E")
+        assert not expr.can_run_for("apc_propellers_17x10N")
