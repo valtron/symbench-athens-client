@@ -116,15 +116,24 @@ def get_mass_estimates_for_quadcopter(testbench_path_or_formulae, quad_copter):
     else:
         formulae = testbench_path_or_formulae
 
+    params = tuple(sorted(aircraft_parameters.keys()))
+    args = [aircraft_parameters[p] for p in params]
+
     mass_properties = {}
     for key, value in formulae.items():
         mass_estimates_key = key.replace("aircraft.", "")
         try:
-            mass_properties[mass_estimates_key] = value.evalf(subs=aircraft_parameters)
+            mass_properties[mass_estimates_key] = lambdify_cached(params, value)(*args)
         except AttributeError:
             mass_properties[mass_estimates_key] = value
 
     return mass_properties
+
+
+@lru_cache(maxsize=1024)
+def lambdify_cached(params, expr):
+    from sympy.utilities.lambdify import lambdify
+    return lambdify(params, expr)
 
 
 def extract_from_zip(zip_path, output_dir, files):
